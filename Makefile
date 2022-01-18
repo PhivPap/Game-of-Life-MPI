@@ -1,5 +1,5 @@
 # When gol-par.c has been created, uncomment the next line:
-# all: gol-seq gol-par
+all: gol-seq gol-par
 
 gol-seq: gol-seq.c
 	gcc -Wall -O3 -o gol-seq gol-seq.c -lm
