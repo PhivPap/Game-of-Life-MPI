@@ -134,6 +134,21 @@ static int world_count(world* world) {
     return isum;
 }
 
+static int partial_world_count(world* world, int top_row, int bottom_row){
+    int** cells = world->cells;
+    int isum;
+    int i, j;
+
+    isum = 0;
+    for (i = top_row; i <= bottom_row; i++) {
+        for (j = 1; j <= world->width; j++) {
+            isum = isum + cells[i][j];
+        }
+    }
+
+    return isum;
+}
+
 /* Take world wrap-around into account: */
 static void world_border_wrap(world *world) {
     int** cells = world->cells;
@@ -353,11 +368,17 @@ static void gather_world(int process_rows, int* distribution, int* displacement)
     MPI_Gatherv(cur_world->cells[1], elements_to_send, MPI_INT, cur_world->cells[0], distribution, displacement, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
+static int reduce_live_cells(int process_rank, int top_row, int bottom_row){
+    int live_cells, partial_world_live_cells = partial_world_count(cur_world, top_row, bottom_row);
+    MPI_Reduce(&partial_world_live_cells, &live_cells, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    return live_cells;
+}
+
 static void parallel_gol_loop(int nsteps, int total_processes, int process_rank, int* distribution, int* displacement, int process_rows){
     assert((nsteps > 0) && (process_rows > 0));
 
     world* tmp_world;
-    int n;
+    int n, live_cells;
 
     /*  time steps */
     for (n = 0; n < nsteps; n++) {
@@ -367,26 +388,32 @@ static void parallel_gol_loop(int nsteps, int total_processes, int process_rank,
         world_partial_left_right_border_wrap(cur_world, 0, process_rows + 1);
         world_partial_timestep(cur_world, next_world, 1, process_rows);
 
-        // swap old and new worlds
+        /* swap old and new worlds */
         tmp_world = cur_world;
         cur_world = next_world;
         next_world = tmp_world;
 
-        // if(process_rank == 0){
-        //     if (print_cells > 0 && (n % print_cells) == (print_cells - 1))
-        //         printf("%d: %d live cells\n", n, world_count(cur_world));
+        /* Print world and population according to main arguments*/
+        if (print_cells > 0 && (n % print_cells) == (print_cells - 1)) {
+            live_cells = reduce_live_cells(process_rank, 1, process_rows);
+            if(process_rank == 0)
+                printf("%d: %d live cells\n", n, live_cells);
+        }
 
-        //     if (print_world > 0 && (n % print_world) == (print_world - 1)) {
-        //         printf("\nafter time step %d:\n\n", n);
-        //         world_print(cur_world);
-        //     }
-        // }
+        if (print_world > 0 && (n % print_world) == (print_world - 1)) {
+            gather_world(process_rows, distribution, displacement);
+            if(process_rank == 0){
+                printf("\nafter time step %d:\n\n", n);
+                world_print(cur_world);
+            }
+        }
     }
 }
 
 static void parallel_gol(int bwidth, int bheight, int nsteps){
     int total_processes, process_rank;
     int process_assigned_elements, process_rows;
+    int live_cells;
     double process_elapsed_sec, max_elapsed_sec;
     int* distribution = NULL;
     int* displacement = NULL;
@@ -426,11 +453,10 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     /* Iterations are done. Print max elapsed time & number of live cells. */
     MPI_Reduce(&process_elapsed_sec, &max_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     fprintf(stderr, "Process %d: Game of Life took %10.3f seconds\n", process_rank, process_elapsed_sec);
-    gather_world(process_rows, distribution, displacement);
+    live_cells = reduce_live_cells(process_rank, 1, process_rows);
     if(process_rank == 0){
-        printf("Number of live cells = %d\n", world_count(cur_world));
+        printf("Number of live cells = %d\n", live_cells);
         fprintf(stderr, "Game of Life took %10.3f seconds\n", max_elapsed_sec);
-        world_print(cur_world);
     }
 
     /* Free resources */
