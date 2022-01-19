@@ -476,8 +476,6 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
         create_worlds(bwidth, bheight); // root creates the full world
         world_init();
         world_distribution_init(total_processes, &distribution, &displacement);
-        for(int i=0; i<total_processes; i++)
-            printf("%d - (%d,%d)\n", i, distribution[i], displacement[i]);
         if (print_world > 0) {
             printf("\ninitial world:\n\n");
             world_print(cur_world);
