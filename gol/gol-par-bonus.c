@@ -14,8 +14,6 @@ Based on https://web.cs.dal.ca/~arc/teaching/CS4125/2014winter/Assignment2/Assig
 #include <assert.h>
 #include "StopWatch/StopWatch.h"
 
-#define NON_BLOCKING
-
 
 typedef struct {
    int height, width;
@@ -492,14 +490,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     int* distribution = NULL;
     int* displacement = NULL;
 
-
-	init_mpi(&total_processes, &process_rank);
-    // #ifdef NON_BLOCKING
-    // int send_buffer_size = 4 * (sizeof(int) * (bwidth + 2) + MPI_BSEND_OVERHEAD); // size large enough to buffer 4 messages
-    // void* send_buffer = malloc(send_buffer_size);
-    // MPI_Buffer_attach(send_buffer, send_buffer_size);
-    // #endif 
-    
+	init_mpi(&total_processes, &process_rank);   
 
     /* root initializes & prints board. */
     if(process_rank == 0){
@@ -547,12 +538,6 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     StopWatch_destroy(process_sw);
     StopWatch_destroy(comms_sw);
     MPI_Finalize();
-
-    // #ifdef NON_BLOCKING
-    // MPI_Buffer_detach(&send_buffer, &send_buffer_size);
-    // free(send_buffer);
-    // #endif
-
     if(process_rank == 0){
         free(distribution);
         free(displacement);

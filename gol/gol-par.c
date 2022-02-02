@@ -479,7 +479,6 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     /* Free resources */
     StopWatch_destroy(process_sw);
     MPI_Finalize();
-
     if(process_rank == 0){
         free(distribution);
         free(displacement);
