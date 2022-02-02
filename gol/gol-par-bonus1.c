@@ -448,7 +448,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     int total_processes, process_rank;
     int process_assigned_elements, process_rows;
     int live_cells;
-    double process_elapsed_sec, comms_elapsed_sec;
+    double process_elapsed_sec, max_elapsed_sec, comms_elapsed_sec, max_comms_elapsed_sec;
     int* distribution = NULL;
     int* displacement = NULL;
 
@@ -486,15 +486,15 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     comms_elapsed_sec = StopWatch_elapsed_sec(comms_sw);
 
     /* Iterations are done. Print max elapsed time & number of live cells. */
-    MPI_Reduce(&process_elapsed_sec, &process_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&comms_elapsed_sec, &comms_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&process_elapsed_sec, &max_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&comms_elapsed_sec, &max_comms_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     //fprintf(stderr, "Process %d: Game of Life took %10.3f seconds\n", process_rank, process_elapsed_sec);
     live_cells = reduce_live_cells(process_rank, 1, process_rows);
     if(process_rank == 0){
         printf("Number of live cells = %d\n", live_cells);
         fflush(stdout);
         fprintf(stderr, "Game of Life took %10.3f seconds\n", process_elapsed_sec);
-        fprintf(stderr, "Communications took %10.3f seconds\n", comms_elapsed_sec);
+        fprintf(stderr, "Communications took %10.3f seconds\n", max_comms_elapsed_sec);
     }
 
     /* Free resources */
