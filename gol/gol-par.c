@@ -499,6 +499,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     MPI_Scatterv(cur_world->cells[0], distribution, displacement, MPI_INT, cur_world->cells[1], process_assigned_elements, MPI_INT, 0, MPI_COMM_WORLD);
 
     /* Start measuring execution time (for each process). Run main loop. Stop measuring execution time. */
+    MPI_Barrier(MPI_COMM_WORLD); // Using a barrier here is necessary because MPI does not guarantee that all processes exit the Scatter() at the same moment.
     process_sw = StopWatch_new();
     parallel_gol_loop(nsteps, total_processes, process_rank, distribution, displacement, process_rows);
     process_elapsed_sec = StopWatch_elapsed_sec(process_sw);
