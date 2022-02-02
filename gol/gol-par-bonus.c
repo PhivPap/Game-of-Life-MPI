@@ -368,16 +368,16 @@ static inline void receive_adjacent_bottom_row(int process_rank, int total_proce
 #ifdef NON_BLOCKING
 static inline void nb_send_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
-        MPI_Bsend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD);
+        MPI_Issend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD, NULL);
     else
-        MPI_Bsend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD);
+        MPI_Issend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD, NULL);
 }
 
 static inline void nb_send_bottom_row(int process_rank, int total_processes, int bottom_row){
     if(process_rank == total_processes - 1)
-        MPI_Bsend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD);
+        MPI_Issend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD, NULL);
     else
-        MPI_Bsend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
+        MPI_Issend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD, NULL);
 }
 #else
 static inline void send_top_row(int process_rank, int total_processes){
@@ -493,11 +493,11 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
 
 
 	init_mpi(&total_processes, &process_rank);
-    #ifdef NON_BLOCKING
-    int send_buffer_size = 4 * (sizeof(int) * (bwidth + 2) + MPI_BSEND_OVERHEAD); // size large enough to buffer 4 messages
-    void* send_buffer = malloc(send_buffer_size);
-    MPI_Buffer_attach(send_buffer, send_buffer_size);
-    #endif 
+    // #ifdef NON_BLOCKING
+    // int send_buffer_size = 4 * (sizeof(int) * (bwidth + 2) + MPI_BSEND_OVERHEAD); // size large enough to buffer 4 messages
+    // void* send_buffer = malloc(send_buffer_size);
+    // MPI_Buffer_attach(send_buffer, send_buffer_size);
+    // #endif 
     
 
     /* root initializes & prints board. */
@@ -547,10 +547,10 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     StopWatch_destroy(comms_sw);
     MPI_Finalize();
 
-    #ifdef NON_BLOCKING
-    MPI_Buffer_detach(&send_buffer, &send_buffer_size);
-    free(send_buffer);
-    #endif
+    // #ifdef NON_BLOCKING
+    // MPI_Buffer_detach(&send_buffer, &send_buffer_size);
+    // free(send_buffer);
+    // #endif
 
     if(process_rank == 0){
         free(distribution);
