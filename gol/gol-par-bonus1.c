@@ -28,8 +28,7 @@ static int print_cells = 0;
 static int print_world = 0;
 
 StopWatch* process_sw;
-StopWatch* computation_sw;
-StopWatch* communication_sw;
+StopWatch* comms_sw;
 
 MPI_Status status;
 
@@ -246,7 +245,6 @@ static void world_timestep(world *old, world *new) {
 static void world_partial_timestep(world *old, world *new, int top_row, int bottom_row){
     int i, j;
 
-    
     for(i = top_row; i <= bottom_row; i++){
         for(j = 1; j <= new->width; j++){
             new->cells[i][j] = world_cell_newstate(old, i, j);
@@ -339,27 +337,6 @@ static void world_distribution_init(int total_processes, int** distribution, int
         (*displacement)[i] *= elements_per_row;
     }
 }
-// static void world_distribution_init(int total_processes, int** distribution, int** displacement){
-//     assert(distribution && displacement);   // distribution & displacement are references, they cannot be null
-//     *distribution = malloc(total_processes * sizeof(int));
-//     *displacement = malloc(total_processes * sizeof(int));
-//     int next_idx, idx = cur_world->width + 2; // index of the first element to be sent (skipping first row)
-//     double idx_d = (double)idx;
-//     int chunk_size = (cur_world->height / total_processes) * (cur_world->width + 2);
-//     double chunk_size_d = ((double)cur_world->height / (double)total_processes) * (cur_world->width + 2);
-
-    
-//     for(int i=0; i<total_processes-1; i++){
-//         next_idx = idx_d > (double)idx ? idx + chunk_size + 1 : idx + chunk_size;
-//         (*distribution)[i] = next_idx - idx;
-//         (*displacement)[i] = idx;
-//         idx = next_idx;
-//         idx_d += chunk_size_d;
-//     }
-//     /* Last process may receive a larger number of rows*/
-//     (*distribution)[total_processes - 1] = (cur_world->height * (cur_world->width + 2)) - (chunk_size * (total_processes - 1));
-//     (*displacement)[total_processes - 1] = idx;
-// }
 
 static void world_process_row_range_init(int process_rank, int total_processes, int* top_row, int* bottom_row){
     assert(top_row && bottom_row);
@@ -371,35 +348,35 @@ static void world_process_row_range_init(int process_rank, int total_processes, 
         *bottom_row = (chunk_size * (process_rank + 1));
 }
 
-static void send_top_row(int process_rank, int total_processes){
+static inline void send_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
         MPI_Ssend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD);
     else
         MPI_Ssend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD);
 }
 
-static void send_bottom_row(int process_rank, int total_processes, int bottom_row){
+static inline void send_bottom_row(int process_rank, int total_processes, int bottom_row){
     if(process_rank == total_processes - 1)
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD);
     else
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
 }
 
-static void receive_adjacent_top_row(int process_rank, int total_processes){
+static inline void receive_adjacent_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
         MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, total_processes - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
     else 
         MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, process_rank - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
 }
 
-static void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
+static inline void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
     if(process_rank == total_processes - 1)
         MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, 0, top_row_tag, MPI_COMM_WORLD, &status);
     else
         MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, top_row_tag, MPI_COMM_WORLD, &status);
 }
 
-static void exchange_rows(int process_rank, int total_processes, int process_rows){
+static inline void exchange_rows(int process_rank, int total_processes, int process_rows){
     if(total_processes == 1){
         world_top_bottom_border_wrap(cur_world);
         return;
@@ -438,7 +415,9 @@ static void parallel_gol_loop(int nsteps, int total_processes, int process_rank,
 
     /*  time steps */
     for (n = 0; n < nsteps; n++) {
-        exchange_rows(process_rank, total_processes, process_rows);        
+        StopWatch_resume(comms_sw);
+        exchange_rows(process_rank, total_processes, process_rows);
+        StopWatch_pause(comms_sw);     
 
         world_partial_left_right_border_wrap(cur_world, 0, process_rows + 1);
         world_partial_timestep(cur_world, next_world, 1, process_rows);
@@ -469,7 +448,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     int total_processes, process_rank;
     int process_assigned_elements, process_rows;
     int live_cells;
-    double process_elapsed_sec, max_elapsed_sec;
+    double process_elapsed_sec, comms_elapsed_sec;
     int* distribution = NULL;
     int* displacement = NULL;
 
@@ -499,21 +478,27 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     MPI_Scatterv(cur_world->cells[0], distribution, displacement, MPI_INT, cur_world->cells[1], process_assigned_elements, MPI_INT, 0, MPI_COMM_WORLD);
 
     /* Start measuring execution time (for each process). Run main loop. Stop measuring execution time. */
+    comms_sw = StopWatch_new();
+    StopWatch_pause(comms_sw);
     process_sw = StopWatch_new();
     parallel_gol_loop(nsteps, total_processes, process_rank, distribution, displacement, process_rows);
     process_elapsed_sec = StopWatch_elapsed_sec(process_sw);
+    comms_elapsed_sec = StopWatch_elapsed_sec(comms_sw);
 
     /* Iterations are done. Print max elapsed time & number of live cells. */
-    MPI_Reduce(&process_elapsed_sec, &max_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&process_elapsed_sec, &process_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&comms_elapsed_sec, &comms_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     //fprintf(stderr, "Process %d: Game of Life took %10.3f seconds\n", process_rank, process_elapsed_sec);
     live_cells = reduce_live_cells(process_rank, 1, process_rows);
     if(process_rank == 0){
         printf("Number of live cells = %d\n", live_cells);
         fflush(stdout);
-        fprintf(stderr, "Game of Life took %10.3f seconds\n", max_elapsed_sec);
+        fprintf(stderr, "Game of Life took %10.3f seconds\n", process_elapsed_sec);
+        fprintf(stderr, "Communications took %10.3f seconds\n", comms_elapsed_sec);
     }
 
     /* Free resources */
+    StopWatch_destroy(comms_sw);
     StopWatch_destroy(process_sw);
     MPI_Finalize();
 
