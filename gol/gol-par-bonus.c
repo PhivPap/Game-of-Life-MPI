@@ -351,6 +351,20 @@ static void world_distribution_init(int total_processes, int** distribution, int
     }
 }
 
+static inline void receive_adjacent_top_row(int process_rank, int total_processes){
+    if(process_rank == 0)
+        MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, total_processes - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
+    else 
+        MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, process_rank - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
+}
+
+static inline void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
+    if(process_rank == total_processes - 1)
+        MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, 0, top_row_tag, MPI_COMM_WORLD, &status);
+    else
+        MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, top_row_tag, MPI_COMM_WORLD, &status);
+}
+
 #ifdef NON_BLOCKING
 static inline void nb_send_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
@@ -379,21 +393,6 @@ static inline void send_bottom_row(int process_rank, int total_processes, int bo
     else
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
 }
-#endif
-
-static inline void receive_adjacent_top_row(int process_rank, int total_processes){
-    if(process_rank == 0)
-        MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, total_processes - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
-    else 
-        MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, process_rank - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
-}
-
-static inline void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
-    if(process_rank == total_processes - 1)
-        MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, 0, top_row_tag, MPI_COMM_WORLD, &status);
-    else
-        MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, top_row_tag, MPI_COMM_WORLD, &status);
-}
 
 static inline void exchange_rows(int process_rank, int total_processes, int process_rows){
     if(total_processes == 1){
@@ -414,6 +413,7 @@ static inline void exchange_rows(int process_rank, int total_processes, int proc
         send_bottom_row(process_rank, total_processes, process_rows);
     }
 }
+#endif
 
 static void gather_world(int process_rows, int* distribution, int* displacement){
     int elements_to_send = process_rows * (cur_world->width + 2);
