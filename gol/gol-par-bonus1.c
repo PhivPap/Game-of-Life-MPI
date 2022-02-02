@@ -503,7 +503,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     if(process_rank == 0){
         printf("Number of live cells = %d\n", live_cells);
         fflush(stdout);
-        fprintf(stderr, "Game of Life took %f seconds\n", process_elapsed_sec);
+        fprintf(stderr, "Game of Life took %f seconds\n", max_elapsed_sec);
         fprintf(stderr, "Communications took %f seconds\n", max_comms_elapsed_sec);
     }
 
