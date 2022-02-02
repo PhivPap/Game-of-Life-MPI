@@ -14,6 +14,8 @@ Based on https://web.cs.dal.ca/~arc/teaching/CS4125/2014winter/Assignment2/Assig
 #include <assert.h>
 #include "StopWatch/StopWatch.h"
 
+#define NON_BLOCKING
+
 
 typedef struct {
    int height, width;
@@ -183,7 +185,7 @@ static void world_top_bottom_border_wrap(world* world){
 
 /*  This function is not required to wrap top-bottom boundaries since these are communicated by other processes. 
     However, the caller should wrap the communicated rows as well. */
-static void world_partial_left_right_border_wrap(world* world, int start_row, int end_row){
+static inline void world_partial_left_right_border_wrap(world* world, int start_row, int end_row){
     int** cells = world->cells;
     int i;
 
@@ -194,7 +196,15 @@ static void world_partial_left_right_border_wrap(world* world, int start_row, in
     }
 }
 
-static int world_cell_newstate(world* world, int row, int col) {
+#ifdef NON_BLOCKING
+static inline void row_left_right_wrap(world* world, int row){
+    int** cells = world->cells;
+    cells[row][0] = cells[row][world->width];
+    cells[row][world->width + 1] = cells[row][1];
+}
+#endif
+
+static inline int world_cell_newstate(world* world, int row, int col) {
     int** cells = world->cells;
     int row_m, row_p, col_m, col_p, nsum;
     int newval;
@@ -241,16 +251,22 @@ static void world_timestep(world *old, world *new) {
     }
 }
 
-// update board partially. [top_row, bottom_row]
+// update board partially including top_row and bottom_row
 static inline void world_partial_timestep(world *old, world *new, int top_row, int bottom_row){
     int i, j;
 
-    
     for(i = top_row; i <= bottom_row; i++){
         for(j = 1; j <= new->width; j++){
             new->cells[i][j] = world_cell_newstate(old, i, j);
         }
     }
+}
+
+// update board partially.
+static inline void row_timestep(world* old, world* new, int row){
+    int i;
+    for(i = 1; i <= new->width; i++)
+        new->cells[row][i] = world_cell_newstate(old, row, i);
 }
 
 static int** alloc_2d_int_array(int nrows, int ncolumns) {
@@ -335,6 +351,21 @@ static void world_distribution_init(int total_processes, int** distribution, int
     }
 }
 
+#ifdef NON_BLOCKING
+static inline void nb_send_top_row(int process_rank, int total_processes){
+    if(process_rank == 0)
+        MPI_Bsend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD);
+    else
+        MPI_Bsend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD);
+}
+
+static inline void nb_send_bottom_row(int process_rank, int total_processes, int bottom_row){
+    if(process_rank == total_processes - 1)
+        MPI_Bsend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD);
+    else
+        MPI_Bsend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
+}
+#else
 static inline void send_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
         MPI_Ssend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD);
@@ -342,28 +373,29 @@ static inline void send_top_row(int process_rank, int total_processes){
         MPI_Ssend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD);
 }
 
-static inline  void send_bottom_row(int process_rank, int total_processes, int bottom_row){
+static inline void send_bottom_row(int process_rank, int total_processes, int bottom_row){
     if(process_rank == total_processes - 1)
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD);
     else
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
 }
+#endif
 
-static inline  void receive_adjacent_top_row(int process_rank, int total_processes){
+static inline void receive_adjacent_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
         MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, total_processes - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
     else 
         MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, process_rank - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
 }
 
-static inline  void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
+static inline void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
     if(process_rank == total_processes - 1)
         MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, 0, top_row_tag, MPI_COMM_WORLD, &status);
     else
         MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, top_row_tag, MPI_COMM_WORLD, &status);
 }
 
-static inline  void exchange_rows(int process_rank, int total_processes, int process_rows){
+static inline void exchange_rows(int process_rank, int total_processes, int process_rows){
     if(total_processes == 1){
         world_top_bottom_border_wrap(cur_world);
         return;
@@ -402,13 +434,33 @@ static void parallel_gol_loop(int nsteps, int total_processes, int process_rank,
 
     /*  time steps */
     for (n = 0; n < nsteps; n++) {
+        #ifdef NON_BLOCKING
+        StopWatch_resume(comms_sw);
+        nb_send_top_row(process_rank, total_processes);
+        nb_send_bottom_row(process_rank, total_processes, process_rows);
+        StopWatch_pause(comms_sw);  
+
+        world_partial_left_right_border_wrap(cur_world, 1, process_rows);   // wraps all rows except the two 'external' rows which are received later.
+        world_partial_timestep(cur_world, next_world, 2, process_rows - 1); // executes timestep on all rows except the top and bottom.
+        
+        StopWatch_resume(comms_sw);
+        receive_adjacent_bottom_row(process_rank, total_processes, process_rows + 1);
+        receive_adjacent_top_row(process_rank, total_processes);
+        StopWatch_pause(comms_sw);
+
+        row_left_right_wrap(cur_world, 0);
+        row_left_right_wrap(cur_world, process_rows + 1);
+        row_timestep(cur_world, next_world, 1);
+        row_timestep(cur_world, next_world, process_rows);
+        #else
         StopWatch_resume(comms_sw);
         exchange_rows(process_rank, total_processes, process_rows);
         StopWatch_pause(comms_sw);      
 
         world_partial_left_right_border_wrap(cur_world, 0, process_rows + 1);
         world_partial_timestep(cur_world, next_world, 1, process_rows);
-
+        #endif
+        
         /* swap old and new worlds */
         tmp_world = cur_world;
         cur_world = next_world;
@@ -441,6 +493,11 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
 
 
 	init_mpi(&total_processes, &process_rank);
+    #ifdef NON_BLOCKING
+    int send_buffer_size = 4 * (sizeof(int) * (bwidth + 2) + MPI_BSEND_OVERHEAD); // size large enough to buffer 4 messages
+    void* send_buffer = malloc(send_buffer_size);
+    MPI_Buffer_attach(send_buffer, send_buffer_size);
+    #endif 
     
 
     /* root initializes & prints board. */
@@ -482,13 +539,18 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
         fflush(stdout);
         fprintf(stderr, "Game of Life took %10.3f seconds\n", max_elapsed_sec);
         fprintf(stderr, "Communications took %10.3f seconds\n", max_comms_elapsed_sec);
-        fprintf(stderr, "(Communication / Computation) ratio: %10.3f%%\n", (max_comms_elapsed_sec / max_elapsed_sec) * 100);
+        fprintf(stderr, "(Communication time / Total time) ratio: %10.3f%%\n", (max_comms_elapsed_sec / max_elapsed_sec) * 100);
     }
 
     /* Free resources */
     StopWatch_destroy(process_sw);
     StopWatch_destroy(comms_sw);
     MPI_Finalize();
+
+    #ifdef NON_BLOCKING
+    MPI_Buffer_detach(&send_buffer, &send_buffer_size);
+    free(send_buffer);
+    #endif
 
     if(process_rank == 0){
         free(distribution);
