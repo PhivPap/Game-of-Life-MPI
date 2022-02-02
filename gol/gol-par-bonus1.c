@@ -488,8 +488,8 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     process_elapsed_sec = StopWatch_elapsed_sec(process_sw);
     comms_elapsed_sec = StopWatch_elapsed_sec(comms_sw);
 
-    printf("Process %d (Wtime) elapsed: %f", process_rank, elaps);
-    printf("Process %d (StopWatch) elapsed: %f", process_rank, comms_elapsed_sec);
+    printf("Process %d (Wtime) elapsed: %f\n", process_rank, elaps);
+    printf("Process %d (StopWatch) elapsed: %f\n", process_rank, comms_elapsed_sec);
 
     /* Iterations are done. Print max elapsed time & number of live cells. */
     MPI_Reduce(&process_elapsed_sec, &max_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
