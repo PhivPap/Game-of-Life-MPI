@@ -350,3 +350,4 @@ MigrationBackup/
 .ionide/
 gol-par
 gol-seq
+.vscode/c_cpp_properties.json
