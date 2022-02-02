@@ -7,7 +7,7 @@ gol-seq: gol-seq.c
 gol-par: gol-par.c
 	mpicc -Wall -O3 -o gol-par gol-par.c StopWatch/StopWatch.c -lm
 
-gol-par-bonus1: gol-par-bonus.c
+gol-par-bonus: gol-par-bonus.c
 	mpicc -Wall -O3 -o gol-par-bonus gol-par-bonus.c StopWatch/StopWatch.c -lm
 
 clean:
