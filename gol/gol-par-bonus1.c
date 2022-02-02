@@ -417,7 +417,7 @@ static void parallel_gol_loop(int nsteps, int total_processes, int process_rank,
     for (n = 0; n < nsteps; n++) {
         StopWatch_resume(comms_sw);
         exchange_rows(process_rank, total_processes, process_rows);
-        StopWatch_pause(comms_sw);     
+        StopWatch_pause(comms_sw);
 
         world_partial_left_right_border_wrap(cur_world, 0, process_rows + 1);
         world_partial_timestep(cur_world, next_world, 1, process_rows);
@@ -493,8 +493,8 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     if(process_rank == 0){
         printf("Number of live cells = %d\n", live_cells);
         fflush(stdout);
-        fprintf(stderr, "Game of Life took %10.3f seconds\n", process_elapsed_sec);
-        fprintf(stderr, "Communications took %10.3f seconds\n", max_comms_elapsed_sec);
+        fprintf(stderr, "Game of Life took %f seconds\n", process_elapsed_sec);
+        fprintf(stderr, "Communications took %f seconds\n", max_comms_elapsed_sec);
     }
 
     /* Free resources */
