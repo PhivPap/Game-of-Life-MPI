@@ -312,18 +312,54 @@ static void world_distribution_init(int total_processes, int** distribution, int
     assert(distribution && displacement);   // distribution & displacement are references, they cannot be null
     *distribution = malloc(total_processes * sizeof(int));
     *displacement = malloc(total_processes * sizeof(int));
-    int chunk_index = cur_world->width + 2; // index of the first element to be sent (skipping first row)
-    int chunk_size = (cur_world->height / total_processes) * (cur_world->width + 2);
+    int elements_per_row = cur_world->width + 2;
+    int next_idx, idx = 1; // index of the first element to be sent (skipping first row)
+    double idx_d = (double)idx;
+    int chunk_size = (cur_world->height / total_processes);
+    double chunk_size_d = (double)cur_world->height / (double)total_processes;
+
     
     for(int i=0; i<total_processes-1; i++){
-        (*distribution)[i] = chunk_size;
-        (*displacement)[i] = chunk_index;
-        chunk_index += chunk_size;
+        next_idx = idx_d > (double)idx ? idx + chunk_size + 1 : idx + chunk_size;
+        (*distribution)[i] = next_idx - idx;
+        (*displacement)[i] = idx;
+        idx = next_idx;
+        idx_d += chunk_size_d;
     }
-    /* Last process may receive a larger number of rows*/
-    (*distribution)[total_processes - 1] = (cur_world->height * (cur_world->width + 2)) - (chunk_size * (total_processes - 1));
-    (*displacement)[total_processes - 1] = chunk_index;
+
+    (*distribution)[total_processes - 1] = cur_world->height + 1 - idx;
+    (*displacement)[total_processes - 1] = idx;
+
+    // printf("Row distribution and displacement: \n");
+    // for (int i=0; i < total_processes; i++)
+    //     printf("process %d: %d - %d\n", i, (*distribution)[i], (*displacement)[i]);
+
+    for(int i=0; i<total_processes; i++){
+        (*distribution)[i] *= elements_per_row;
+        (*displacement)[i] *= elements_per_row;
+    }
 }
+// static void world_distribution_init(int total_processes, int** distribution, int** displacement){
+//     assert(distribution && displacement);   // distribution & displacement are references, they cannot be null
+//     *distribution = malloc(total_processes * sizeof(int));
+//     *displacement = malloc(total_processes * sizeof(int));
+//     int next_idx, idx = cur_world->width + 2; // index of the first element to be sent (skipping first row)
+//     double idx_d = (double)idx;
+//     int chunk_size = (cur_world->height / total_processes) * (cur_world->width + 2);
+//     double chunk_size_d = ((double)cur_world->height / (double)total_processes) * (cur_world->width + 2);
+
+    
+//     for(int i=0; i<total_processes-1; i++){
+//         next_idx = idx_d > (double)idx ? idx + chunk_size + 1 : idx + chunk_size;
+//         (*distribution)[i] = next_idx - idx;
+//         (*displacement)[i] = idx;
+//         idx = next_idx;
+//         idx_d += chunk_size_d;
+//     }
+//     /* Last process may receive a larger number of rows*/
+//     (*distribution)[total_processes - 1] = (cur_world->height * (cur_world->width + 2)) - (chunk_size * (total_processes - 1));
+//     (*displacement)[total_processes - 1] = idx;
+// }
 
 static void world_process_row_range_init(int process_rank, int total_processes, int* top_row, int* bottom_row){
     assert(top_row && bottom_row);
@@ -450,6 +486,9 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
             printf("\ninitial world:\n\n");
             world_print(cur_world);
         }
+        // printf("Row distribution and displacement: \n");
+        // for (int i=0; i < total_processes; i++)
+        //     printf("process %d: %d - %d\n", i, distribution[i], displacement[i]);
     }
 
     // root scatters the distribution for each process to know the size of their world
