@@ -471,7 +471,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     process_sw = StopWatch_new();
     parallel_gol_loop(nsteps, total_processes, process_rank, distribution, displacement, process_rows);
     process_elapsed_sec = StopWatch_elapsed_sec(process_sw);
-    StopWatch_elapsed_sec(comms_sw);
+    comms_elapsed_sec = StopWatch_elapsed_sec(comms_sw);
 
     /* Iterations are done. Print max elapsed time & number of live cells. */
     MPI_Reduce(&process_elapsed_sec, &max_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
