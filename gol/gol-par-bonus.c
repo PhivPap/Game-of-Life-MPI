@@ -328,13 +328,13 @@ static void world_distribution_init(int total_processes, int** distribution, int
     *distribution = malloc(total_processes * sizeof(int));
     *displacement = malloc(total_processes * sizeof(int));
     int elements_per_row = cur_world->width + 2;
-    int next_idx, idx = 1; // index of the first element to be sent (skipping first row)
+    int i, next_idx, idx = 1; // index of the first element to be sent (skipping first row)
     double idx_d = (double)idx;
     int chunk_size = (cur_world->height / total_processes);
     double chunk_size_d = (double)cur_world->height / (double)total_processes;
 
     
-    for(int i=0; i<total_processes-1; i++){
+    for(i=0; i<total_processes-1; i++){
         next_idx = idx_d > (double)idx ? idx + chunk_size + 1 : idx + chunk_size;
         (*distribution)[i] = next_idx - idx;
         (*displacement)[i] = idx;
@@ -345,7 +345,7 @@ static void world_distribution_init(int total_processes, int** distribution, int
     (*distribution)[total_processes - 1] = cur_world->height + 1 - idx;
     (*displacement)[total_processes - 1] = idx;
 
-    for(int i=0; i<total_processes; i++){
+    for(i=0; i<total_processes; i++){
         (*distribution)[i] *= elements_per_row;
         (*displacement)[i] *= elements_per_row;
     }
