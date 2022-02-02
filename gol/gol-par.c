@@ -335,36 +335,6 @@ static void world_process_row_range_init(int process_rank, int total_processes, 
         *bottom_row = (chunk_size * (process_rank + 1));
 }
 
-// static void send_top_bottom_rows(int top_row, int bottom_row, int total_processes, int process_rank){
-//     if(process_rank == 0)
-//         MPI_Send(cur_world->cells[top_row], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD);
-//     else 
-//         MPI_Send(cur_world->cells[top_row], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD);
-
-//     if(process_rank == total_processes - 1)
-//         MPI_Send(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD);
-//     else
-//         MPI_Send(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
-// }
-
-// static void receive_adjacent_rows(int top_adjacent_row, int bottom_adjacent_row, int total_processes, int process_rank){
-//     MPI_Status status;
-    
-//     /*  The top adjacent row received by process 0 is the bottom row sent by the last process. 
-//         All other processes receive the bottom row sent by the previous process.*/
-//     if(process_rank == 0)
-//         MPI_Recv(cur_world->cells[top_adjacent_row], cur_world->width + 2, MPI_INT, total_processes - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
-//     else 
-//         MPI_Recv(cur_world->cells[top_adjacent_row], cur_world->width + 2, MPI_INT, process_rank - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
-
-//     /*  The bottom adjacent row received by the last process is the top row sent by process 0.
-//         All other processes receive the top row sent by the next process. */
-//     if(process_rank == total_processes - 1)
-//         MPI_Recv(cur_world->cells[bottom_adjacent_row], cur_world->width + 2, MPI_INT, 0, top_row_tag, MPI_COMM_WORLD, &status);
-//     else
-//         MPI_Recv(cur_world->cells[bottom_adjacent_row], cur_world->width + 2, MPI_INT, process_rank + 1, top_row_tag, MPI_COMM_WORLD, &status);
-// }
-
 static void send_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
         MPI_Ssend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD);
@@ -503,6 +473,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     live_cells = reduce_live_cells(process_rank, 1, process_rows);
     if(process_rank == 0){
         printf("Number of live cells = %d\n", live_cells);
+        fflush(stdout);
         fprintf(stderr, "Game of Life took %10.3f seconds\n", max_elapsed_sec);
     }
 
