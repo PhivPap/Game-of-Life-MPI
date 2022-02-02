@@ -33,6 +33,7 @@ static StopWatch* process_sw;
 static StopWatch* comms_sw;
 
 static MPI_Status status;
+static MPI_Request request;
 
 // use fixed world or random world?
 #ifdef FIXED_WORLD
@@ -368,16 +369,16 @@ static inline void receive_adjacent_bottom_row(int process_rank, int total_proce
 #ifdef NON_BLOCKING
 static inline void nb_send_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
-        MPI_Issend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD, NULL);
+        MPI_Issend(cur_world->cells[1], cur_world->width + 2, MPI_INT, total_processes - 1, top_row_tag, MPI_COMM_WORLD, &request);
     else
-        MPI_Issend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD, NULL);
+        MPI_Issend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD, &request);
 }
 
 static inline void nb_send_bottom_row(int process_rank, int total_processes, int bottom_row){
     if(process_rank == total_processes - 1)
-        MPI_Issend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD, NULL);
+        MPI_Issend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD, &request);
     else
-        MPI_Issend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD, NULL);
+        MPI_Issend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD, &request);
 }
 #else
 static inline void send_top_row(int process_rank, int total_processes){
