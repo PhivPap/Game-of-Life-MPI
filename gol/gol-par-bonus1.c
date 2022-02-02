@@ -30,6 +30,7 @@ static int print_world = 0;
 StopWatch* process_sw;
 StopWatch* comms_sw;
 static double elaps = 0.0;
+static double total_elaps = 0.0;
 
 MPI_Status status;
 
@@ -454,7 +455,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     double process_elapsed_sec, max_elapsed_sec, comms_elapsed_sec, max_comms_elapsed_sec;
     int* distribution = NULL;
     int* displacement = NULL;
-
+    double aaaaa;
 
 	init_mpi(&total_processes, &process_rank);
     
@@ -483,13 +484,16 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     /* Start measuring execution time (for each process). Run main loop. Stop measuring execution time. */
     comms_sw = StopWatch_new();
     StopWatch_pause(comms_sw);
+    aaaaa = MPI_Wtime();
     process_sw = StopWatch_new();
     parallel_gol_loop(nsteps, total_processes, process_rank, distribution, displacement, process_rows);
     process_elapsed_sec = StopWatch_elapsed_sec(process_sw);
+    total_elaps = MPI_Wtime() - aaaaa;
     comms_elapsed_sec = StopWatch_elapsed_sec(comms_sw);
 
-    printf("Process %d (Wtime) elapsed: %f\n", process_rank, elaps);
-    printf("Process %d (StopWatch) elapsed: %f\n", process_rank, comms_elapsed_sec);
+    //printf("Process %d (Wtime) elapsed: %f\n", process_rank, elaps);
+    //printf("Process %d (StopWatch) elapsed: %f\n", process_rank, comms_elapsed_sec);
+    printf("Process %d (Wtime) elapsed: %f\n", process_rank, total_elaps);
 
     /* Iterations are done. Print max elapsed time & number of live cells. */
     MPI_Reduce(&process_elapsed_sec, &max_elapsed_sec, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
