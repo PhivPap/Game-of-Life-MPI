@@ -549,6 +549,7 @@ int main(int argc, char* argv[]) {
     int nsteps;
     int bwidth, bheight;
 
+    StopWatch* total_program_sw = StopWatch_new();
     /* Get Parameters */
     if (argc != 6) {
         fprintf(stderr, "Usage: %s width height steps print_world print_cells\n", argv[0]);
@@ -567,5 +568,7 @@ int main(int argc, char* argv[]) {
 
     parallel_gol(bwidth, bheight, nsteps);
 
+    printf("Time required by the whole program: %10.3f\n", StopWatch_elapsed_sec(total_program_sw));
+    StopWatch_destroy(total_program_sw);
     return 0;
 }
