@@ -119,21 +119,7 @@ static void world_print(world* world) {
     }
 }
 
-static int world_count(world* world) {
-    int** cells = world->cells;
-    int isum;
-    int i, j;
-
-    isum = 0;
-    for (i = 1; i <= world->height; i++) {
-        for (j = 1; j <= world->width; j++) {
-            isum = isum + cells[i][j];
-        }
-    }
-
-    return isum;
-}
-
+// returns the number of living cells between top_row and bottom_row (inclusive)
 static int partial_world_count(world* world, int top_row, int bottom_row){
     int** cells = world->cells;
     int isum;
@@ -149,26 +135,7 @@ static int partial_world_count(world* world, int top_row, int bottom_row){
     return isum;
 }
 
-/* Take world wrap-around into account: */
-static void world_border_wrap(world *world) {
-    int** cells = world->cells;
-    int i, j;
-
-    /* left-right boundary conditions */
-    for (i = 1; i <= world->height; i++) {
-        cells[i][0] = cells[i][world->width];
-        cells[i][world->width + 1] = cells[i][1];
-    }
-
-    /* top-bottom boundary conditions */
-    for (j = 0; j <= world->width + 1; j++) {
-        cells[0][j] = cells[world->height][j];
-        cells[world->height + 1][j] = cells[1][j];
-    }
-}
-
-/*  This function should be called once, before the main loop. 
-    This will remove the need for extra communication between the first and the last process before the computation part starts. */
+/*  This function should only be used when only one process runs the program. */
 static void world_top_bottom_border_wrap(world* world){
     int** cells = world->cells;
     int i;
@@ -181,7 +148,7 @@ static void world_top_bottom_border_wrap(world* world){
 }
 
 /*  This function is not required to wrap top-bottom boundaries since these are communicated by other processes. 
-    However, the caller should wrap the communicated rows as well. */
+    However, the caller should wrap the received 'extra' rows as well. */
 static void world_partial_left_right_border_wrap(world* world, int start_row, int end_row){
     int** cells = world->cells;
     int i;
@@ -225,26 +192,9 @@ static int world_cell_newstate(world* world, int row, int col) {
     return newval;
 }
 
-
-// update board for next timestep
-// height/width params are the base height/width
-// excluding the surrounding 1-cell wraparound border
-static void world_timestep(world *old, world *new) {
-    int i, j;
-
-    // update board
-    for (i = 1; i <= new->height; i++) {
-        for (j = 1; j <= new->width; j++) {
-            new->cells[i][j] = world_cell_newstate(old, i, j);
-        }
-    }
-}
-
-// update board partially. [top_row, bottom_row]
+// update board partially including top_row and bottom_row
 static inline void world_partial_timestep(world *old, world *new, int top_row, int bottom_row){
     int i, j;
-
-    
     for(i = top_row; i <= bottom_row; i++){
         for(j = 1; j <= new->width; j++){
             new->cells[i][j] = world_cell_newstate(old, i, j);
@@ -315,7 +265,6 @@ static void world_distribution_init(int total_processes, int** distribution, int
     double idx_d = (double)idx;
     int chunk_size = (cur_world->height / total_processes);
     double chunk_size_d = (double)cur_world->height / (double)total_processes;
-
     
     for(int i=0; i<total_processes-1; i++){
         next_idx = idx_d > (double)idx ? idx + chunk_size + 1 : idx + chunk_size;
@@ -404,7 +353,7 @@ static void parallel_gol_loop(int nsteps, int total_processes, int process_rank,
         exchange_rows(process_rank, total_processes, process_rows);        
 
         world_partial_left_right_border_wrap(cur_world, 0, process_rows + 1);
-        world_partial_timestep(cur_world, next_world, 1, process_rows);
+        world_partial_timestep(cur_world, next_world, 1, process_rows); 
 
         /* swap old and new worlds */
         tmp_world = cur_world;
@@ -436,10 +385,8 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     int* distribution = NULL;
     int* displacement = NULL;
 
-
 	init_mpi(&total_processes, &process_rank);
     
-
     /* root initializes & prints board. */
     if(process_rank == 0){
         create_worlds(bwidth, bheight); // root creates the full world
@@ -455,6 +402,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     MPI_Scatter(distribution, 1, MPI_INT, &process_assigned_elements, 1, MPI_INT, 0, MPI_COMM_WORLD); 
     process_rows = process_assigned_elements / (bwidth + 2);
 
+    // all processes except the master create worlds of smaller sizes
     if(process_rank != 0)
         create_worlds(bwidth, process_assigned_elements / process_rows);
 

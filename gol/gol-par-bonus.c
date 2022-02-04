@@ -31,7 +31,10 @@ static StopWatch* process_sw;
 static StopWatch* comms_sw;
 
 static MPI_Status status;
+
+#ifdef NON_BLOCKING
 static MPI_Request request;
+#endif
 
 // use fixed world or random world?
 #ifdef FIXED_WORLD
@@ -121,21 +124,6 @@ static void world_print(world* world) {
     }
 }
 
-static int world_count(world* world) {
-    int** cells = world->cells;
-    int isum;
-    int i, j;
-
-    isum = 0;
-    for (i = 1; i <= world->height; i++) {
-        for (j = 1; j <= world->width; j++) {
-            isum = isum + cells[i][j];
-        }
-    }
-
-    return isum;
-}
-
 static int partial_world_count(world* world, int top_row, int bottom_row){
     int** cells = world->cells;
     int isum;
@@ -151,26 +139,7 @@ static int partial_world_count(world* world, int top_row, int bottom_row){
     return isum;
 }
 
-/* Take world wrap-around into account: */
-static void world_border_wrap(world *world) {
-    int** cells = world->cells;
-    int i, j;
-
-    /* left-right boundary conditions */
-    for (i = 1; i <= world->height; i++) {
-        cells[i][0] = cells[i][world->width];
-        cells[i][world->width + 1] = cells[i][1];
-    }
-
-    /* top-bottom boundary conditions */
-    for (j = 0; j <= world->width + 1; j++) {
-        cells[0][j] = cells[world->height][j];
-        cells[world->height + 1][j] = cells[1][j];
-    }
-}
-
-/*  This function should be called once, before the main loop. 
-    This will remove the need for extra communication between the first and the last process before the computation part starts. */
+/*  This function should only be used when only one process runs the program. */
 static void world_top_bottom_border_wrap(world* world){
     int** cells = world->cells;
     int i;
@@ -235,21 +204,6 @@ static inline int world_cell_newstate(world* world, int row, int col) {
     return newval;
 }
 
-
-// update board for next timestep
-// height/width params are the base height/width
-// excluding the surrounding 1-cell wraparound border
-static void world_timestep(world *old, world *new) {
-    int i, j;
-
-    // update board
-    for (i = 1; i <= new->height; i++) {
-        for (j = 1; j <= new->width; j++) {
-            new->cells[i][j] = world_cell_newstate(old, i, j);
-        }
-    }
-}
-
 // update board partially including top_row and bottom_row
 static inline void world_partial_timestep(world *old, world *new, int top_row, int bottom_row){
     int i, j;
@@ -295,8 +249,8 @@ static int** alloc_2d_int_array(int nrows, int ncolumns) {
 static void init_mpi(int* total_processes, int* process_rank){
     assert(total_processes && process_rank);                // args are references, they cannot be null.
     MPI_Init(NULL, NULL);
-    MPI_Comm_size(MPI_COMM_WORLD, total_processes);         // init total_processes
-	MPI_Comm_rank(MPI_COMM_WORLD, process_rank);            // init process_rank (different for every process)
+    MPI_Comm_size(MPI_COMM_WORLD, total_processes);
+	MPI_Comm_rank(MPI_COMM_WORLD, process_rank);
 }
 
 static void create_worlds(int bwidth, int bheight){
@@ -331,7 +285,6 @@ static void world_distribution_init(int total_processes, int** distribution, int
     double idx_d = (double)idx;
     int chunk_size = (cur_world->height / total_processes);
     double chunk_size_d = (double)cur_world->height / (double)total_processes;
-
     
     for(i=0; i<total_processes-1; i++){
         next_idx = idx_d > (double)idx ? idx + chunk_size + 1 : idx + chunk_size;
@@ -492,9 +445,9 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
 
 	init_mpi(&total_processes, &process_rank);   
 
-    /* root initializes & prints board. */
+    /* master initializes & prints board. */
     if(process_rank == 0){
-        create_worlds(bwidth, bheight); // root creates the full world
+        create_worlds(bwidth, bheight); // master creates the full world
         world_init();
         world_distribution_init(total_processes, &distribution, &displacement);
         if (print_world > 0) {
@@ -507,6 +460,7 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     MPI_Scatter(distribution, 1, MPI_INT, &process_assigned_elements, 1, MPI_INT, 0, MPI_COMM_WORLD); 
     process_rows = process_assigned_elements / (bwidth + 2);
 
+    // all processes except the master create worlds of smaller sizes
     if(process_rank != 0)
         create_worlds(bwidth, process_assigned_elements / process_rows);
 
@@ -549,7 +503,6 @@ int main(int argc, char* argv[]) {
     int nsteps;
     int bwidth, bheight;
 
-    StopWatch* total_program_sw = StopWatch_new();
     /* Get Parameters */
     if (argc != 6) {
         fprintf(stderr, "Usage: %s width height steps print_world print_cells\n", argv[0]);
@@ -568,7 +521,5 @@ int main(int argc, char* argv[]) {
 
     parallel_gol(bwidth, bheight, nsteps);
 
-    printf("Time required by the whole program: %10.3f\n", StopWatch_elapsed_sec(total_program_sw));
-    StopWatch_destroy(total_program_sw);
     return 0;
 }
