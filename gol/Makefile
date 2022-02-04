@@ -14,4 +14,4 @@ gol-par-bonus-non-blocking: gol-par-bonus.c
 	mpicc -Wall -O3 -o gol-par-bonus-non-blocking -D NON_BLOCKING gol-par-bonus.c StopWatch/StopWatch.c -lm
 
 clean:
-	rm -f *.o gol-seq gol-par *~ *core
+	rm -f *.o gol-seq gol-par gol-par-bonus-blocking gol-par-bonus-non-blocking *~ *core
