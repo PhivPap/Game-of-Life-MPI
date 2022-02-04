@@ -139,6 +139,7 @@ static int partial_world_count(world* world, int top_row, int bottom_row){
     return isum;
 }
 
+#ifndef NON_BLOCKING
 /*  This function should only be used when only one process runs the program. */
 static void world_top_bottom_border_wrap(world* world){
     int** cells = world->cells;
@@ -150,6 +151,7 @@ static void world_top_bottom_border_wrap(world* world){
         cells[world->height + 1][i] = cells[1][i];
     }
 }
+#endif
 
 /*  This function is not required to wrap top-bottom boundaries since these are communicated by other processes. 
     However, the caller should wrap the communicated rows as well. */
