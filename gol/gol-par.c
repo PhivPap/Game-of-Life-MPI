@@ -160,7 +160,7 @@ static void world_partial_left_right_border_wrap(world* world, int start_row, in
     }
 }
 
-static int world_cell_newstate(world* world, int row, int col) {
+static inline int world_cell_newstate(world* world, int row, int col) {
     int** cells = world->cells;
     int row_m, row_p, col_m, col_p, nsum;
     int newval;
@@ -290,28 +290,28 @@ static inline void send_top_row(int process_rank, int total_processes){
         MPI_Ssend(cur_world->cells[1], cur_world->width + 2, MPI_INT, process_rank - 1, top_row_tag, MPI_COMM_WORLD);
 }
 
-static inline  void send_bottom_row(int process_rank, int total_processes, int bottom_row){
+static inline void send_bottom_row(int process_rank, int total_processes, int bottom_row){
     if(process_rank == total_processes - 1)
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, 0, bottom_row_tag, MPI_COMM_WORLD);
     else
         MPI_Ssend(cur_world->cells[bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, bottom_row_tag, MPI_COMM_WORLD);
 }
 
-static inline  void receive_adjacent_top_row(int process_rank, int total_processes){
+static inline void receive_adjacent_top_row(int process_rank, int total_processes){
     if(process_rank == 0)
         MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, total_processes - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
     else 
         MPI_Recv(cur_world->cells[0], cur_world->width + 2, MPI_INT, process_rank - 1, bottom_row_tag, MPI_COMM_WORLD, &status);
 }
 
-static inline  void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
+static inline void receive_adjacent_bottom_row(int process_rank, int total_processes, int adj_bottom_row){
     if(process_rank == total_processes - 1)
         MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, 0, top_row_tag, MPI_COMM_WORLD, &status);
     else
         MPI_Recv(cur_world->cells[adj_bottom_row], cur_world->width + 2, MPI_INT, process_rank + 1, top_row_tag, MPI_COMM_WORLD, &status);
 }
 
-static inline  void exchange_rows(int process_rank, int total_processes, int process_rows){
+static inline void exchange_rows(int process_rank, int total_processes, int process_rows){
     if(total_processes == 1){
         world_top_bottom_border_wrap(cur_world);
         return;
