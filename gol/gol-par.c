@@ -386,6 +386,11 @@ static void parallel_gol(int bwidth, int bheight, int nsteps){
     int* displacement = NULL;
 
 	init_mpi(&total_processes, &process_rank);
+    if(bheight < total_processes){
+        if(process_rank == 0)
+            printf("Cannot simulate world with less rows than processes running this simulation.\n");
+        exit(1);
+    }
     
     /* root initializes & prints board. */
     if(process_rank == 0){
